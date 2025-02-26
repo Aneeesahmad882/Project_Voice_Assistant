@@ -29,6 +29,5 @@ This project is a simple AI voice assistant backend using FastAPI.
 
 4. **Run with Docker**:
    ```bash
-   docker build -t voice-assistant .
-   docker run -d -p 8000:8000 voice-assistant
+   docker compose up --build
    ```
