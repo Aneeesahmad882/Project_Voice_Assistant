@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Assistant</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background-color: #4a6fa5;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0;
+        }
+        .assistant-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .chat-container {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background-color: #e1f5fe;
+            margin-left: 20%;
+            margin-right: 5px;
+        }
+        .assistant-message {
+            background-color: #f0f4c3;
+            margin-right: 20%;
+            margin-left: 5px;
+        }
+        .input-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #4a6fa5;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3a5a80;
+        }
+        #send-button {
+            border-radius: 0 4px 4px 0;
+        }
+        #voice-button {
+            border-radius: 4px;
+            margin-left: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .mic-icon {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+        .history-container {
+            margin-top: 30px;
+        }
+        .history-title {
+            margin-bottom: 10px;
+            color: #4a6fa5;
+        }
+        .history-item {
+            background-color: white;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .history-text {
+            font-weight: bold;
+        }
+        .history-intent {
+            color: #4a6fa5;
+            font-style: italic;
+        }
+        .history-response {
+            margin-top: 5px;
+        }
+        .recording {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { background-color: #4a6fa5; }
+            50% { background-color: #e53935; }
+            100% { background-color: #4a6fa5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Voice Assistant</h1>
+        </header>
+        
+        <div class="assistant-container">
+            <div class="chat-container" id="chat-container"></div>
+            
+            <div class="input-container">
+                <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+                <button id="send-button">Send</button>
+                <button id="voice-button">
+                    <svg class="mic-icon" viewBox="0 0 24 24">
+                        <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <div class="history-container">
+            <h2 class="history-title">Recent Interactions</h2>
+            <div id="history-list"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatContainer = document.getElementById('chat-container');
+            const userInput = document.getElementById('user-input');
+            const sendButton = document.getElementById('send-button');
+            const voiceButton = document.getElementById('voice-button');
+            const historyList = document.getElementById('history-list');
+            
+            let isRecording = false;
+            let mediaRecorder;
+            let audioChunks = [];
+            
+            // Add welcome message
+            addMessage("Hello! How can I help you today?", 'assistant');
+            
+            // Load interaction history
+            loadHistory();
+            
+            // Send message when button is clicked
+            sendButton.addEventListener('click', sendMessage);
+            
+            // Send message when Enter key is pressed
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            // Handle voice input
+            voiceButton.addEventListener('click', toggleRecording);
+            
+            function sendMessage() {
+                const text = userInput.value.trim();
+                if (text === '') return;
+                
+                // Add user message to chat
+                addMessage(text, 'user');
+                
+                // Clear input field
+                userInput.value = '';
+                
+                // Send request to API
+                fetch('/process-text/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: text }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Add assistant response to chat
+                    addMessage(data.message, 'assistant');
+                    
+                    // Refresh history
+                    loadHistory();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    addMessage('Sorry, there was an error processing your request.', 'assistant');
+                });
+            }
+            
+            function addMessage(text, sender) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                messageElement.classList.add(sender + '-message');
+                messageElement.textContent = text;
+                
+                chatContainer.appendChild(messageElement);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            
+            function loadHistory() {
+                fetch('/history/')
+                .then(response => response.json())
+                .then(data => {
+                    historyList.innerHTML = '';
+                    
+                    if (data.history && data.history.length > 0) {
+                        data.history.forEach(item => {
+                            const historyItem = document.createElement('div');
+                            historyItem.classList.add('history-item');
+                            
+                            const timestamp = new Date(item.timestamp).toLocaleString();
+                            
+                            historyItem.innerHTML = `
+                                <div class="history-text">You: ${item.text}</div>
+                                <div class="history-intent">Intent: ${item.intent}</div>
+                                <div class="history-response">Assistant: ${item.response?.text || 'No response'}</div>
+                                <small>${timestamp}</small>
+                            `;
+                            
+                            historyList.appendChild(historyItem);
+                        });
+                    } else {
+                        historyList.innerHTML = '<p>No interaction history yet.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading history:', error);
+                    historyList.innerHTML = '<p>Error loading history.</p>';
+                });
+            }
+            
+            function toggleRecording() {
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+            }
+            
+            function startRecording() {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        isRecording = true;
+                        voiceButton.classList.add('recording');
+                        
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+                        
+                        mediaRecorder.addEventListener('dataavailable', event => {
+                            audioChunks.push(event.data);
+                        });
+                        
+                        mediaRecorder.addEventListener('stop', () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            sendAudioToServer(audioBlob);
+                            
+                            // Stop all tracks in the stream to release the microphone
+                            stream.getTracks().forEach(track => track.stop());
+                        });
+                        
+                        mediaRecorder.start();
+                        
+                        // Stop recording after 5 seconds
+                        setTimeout(() => {
+                            if (isRecording) {
+                                stopRecording();
+                            }
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        console.error('Error accessing microphone:', error);
+                        alert('Error accessing microphone. Please check permissions.');
+                    });
+                } else {
+                    alert('Your browser does not support audio recording.');
+                }
+            }
+            
+            function stopRecording() {
+                if (mediaRecorder && isRecording) {
+                    isRecording = false;
+                    voiceButton.classList.remove('recording');
+                    mediaRecorder.stop();
+                }
+            }
+            
+            function sendAudioToServer(audioBlob) {
+                addMessage('Processing your voice...', 'assistant');
+                
+                const formData = new FormData();
+                formData.append('audio_file', audioBlob, 'recording.wav');
+                
+                fetch('/process-audio/', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        addMessage(data.error, 'assistant');
+                    } else {
+                        // Add recognized text as user message
+                        addMessage(data.text, 'user');
+                        
+                        // Add assistant response
+                        addMessage(data.message, 'assistant');
+                        
+                        // Play audio response if available
+                        if (data.audio_response) {
+                            playAudioResponse(data.audio_response);
+                        }
+                        
+                        // Refresh history
+                        loadHistory();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    addMessage('Sorry, there was an error processing your voice.', 'assistant');
+                });
+            }
+            
+            function playAudioResponse(base64Audio) {
+                const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+                audio.play().catch(error => {
+                    console.error('Error playing audio:', error);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
